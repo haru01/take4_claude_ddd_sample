@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createTraining, createTrainingId } from '../../../src/training/domain/functions';
 import { Training } from '../../../src/training/domain/types';
 import { Result } from '../../../src/shared/types';
+import { de } from 'zod/v4/locales';
 
 // ==========================================
 // テストユーティリティ
@@ -13,10 +14,6 @@ const defaultTrainingData = {
   dateTime: new Date('2099-02-01T10:00:00+09:00'),
   location: 'オンライン',
   capacity: 30
-};
-
-const createTrainingWithDefaults = (overrides: Partial<typeof defaultTrainingData> = {}): Result<Training> => {
-  return createTraining({ ...defaultTrainingData, ...overrides });
 };
 
 // 日付ヘルパー関数
@@ -33,16 +30,16 @@ const oneDayAfter = () => {
 };
 
 // カスタムアサーション
-const expectValidationError = (input: Partial<typeof defaultTrainingData>, expectedError: string) => {
-  const result = createTrainingWithDefaults(input);
+const expectValidationError = (overrides: Partial<typeof defaultTrainingData>, expectedError: string) => {
+  const result = createTraining({ ...defaultTrainingData, ...overrides });
   expect(result.success).toBe(false);
   if (!result.success) {
     expect(result.error).toContain(expectedError);
   }
 };
 
-const expectSuccess = (input: Partial<typeof defaultTrainingData> = {}) => {
-  const result = createTrainingWithDefaults(input);
+const expectSuccess = (overrides: Partial<typeof defaultTrainingData> = {}) => {
+  const result = createTraining({ ...defaultTrainingData, ...overrides });
   expect(result.success).toBe(true);
   return result;
 };
@@ -50,26 +47,18 @@ const expectSuccess = (input: Partial<typeof defaultTrainingData> = {}) => {
 // ==========================================
 // テスト本体
 // ==========================================
-
 describe('研修情報の登録', () => {
   describe('createTraining', () => {
     describe('正常系', () => {
       it('有効な研修情報を登録できる', () => {
-        const result = createTrainingWithDefaults();
+        const result = createTraining(defaultTrainingData)
 
         expect(result.success).toBe(true);
         if (result.success) {
           const { value } = result;
-          expect(value.title).toBe(defaultTrainingData.title);
-          expect(value.description).toBe(defaultTrainingData.description);
-          expect(value.dateTime).toEqual(defaultTrainingData.dateTime);
-          expect(value.location).toBe(defaultTrainingData.location);
-          expect(value.capacity).toBe(defaultTrainingData.capacity);
-          expect(value.status.type).toBe('DRAFT');
-          expect(value.registeredCount).toBe(0);
-          expect(value.id).toBeDefined();
-          expect(value.createdAt).toBeDefined();
-          expect(value.updatedAt).toBeDefined();
+          expect(value).toMatchObject(
+            defaultTrainingData,
+          );
         }
       });
     });

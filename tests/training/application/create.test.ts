@@ -132,13 +132,13 @@ describe('研修情報の登録（アプリケーション層）', () => {
       if (result1._tag === 'Right' && result2._tag === 'Right') {
         const training1 = result1.right as Training;
         const training2 = result2.right as Training;
-        
+
         const saved1 = await repository.findById(training1.id)();
         const saved2 = await repository.findById(training2.id)();
-        
+
         expect(saved1._tag).toBe('Right');
         expect(saved2._tag).toBe('Right');
-        
+
         if (saved1._tag === 'Right' && saved2._tag === 'Right') {
           expect(saved1.right?.title).toBe(command1.title);
           expect(saved2.right?.title).toBe(command2.title);
