@@ -15,11 +15,6 @@ export const createTraining = (data: {
 }): Result<Training> => {
   const now = new Date();
   
-  // ビジネスロジック: 過去の日時チェック
-  if (data.dateTime <= now) {
-    return { success: false, error: '過去の日時は指定できません' };
-  }
-  
   const training = {
     id: createTrainingId(),
     title: data.title,
@@ -33,7 +28,7 @@ export const createTraining = (data: {
     updatedAt: now
   };
 
-  // Zodスキーマ検証
+  // Zodスキーマ検証（過去の日時チェックを含む）
   const result = TrainingSchema.safeParse(training);
   
   return result.success
