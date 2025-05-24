@@ -11,11 +11,11 @@ export const TrainingStatusSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('CANCELLED'), cancelledAt: z.date(), reason: z.string() })
 ]);
 
-export const TrainingSchema = z.object({
+export const createTrainingSchema = (now: Date) => z.object({
   id: z.string().uuid(),
   title: z.string().min(1, { message: 'タイトルは必須です' }).max(100, { message: 'タイトルは100文字以内で入力してください' }),
   description: z.string().min(1, { message: '説明は必須です' }).max(1000, { message: '説明は1000文字以内で入力してください' }),
-  dateTime: z.date().refine((date) => date > new Date(), { message: '過去の日時は指定できません' }),
+  dateTime: z.date().refine((date) => date > now, { message: '過去の日時は指定できません' }),
   location: z.string().min(1, { message: '場所は必須です' }).max(100, { message: '場所は100文字以内で入力してください' }),
   capacity: z.number().int().min(1, { message: '定員は1名以上で設定してください' }).max(1000, { message: '定員は1000名以下で設定してください' }),
   registeredCount: z.number().int().nonnegative(),
@@ -26,4 +26,4 @@ export const TrainingSchema = z.object({
 
 // === 型推論 ===
 export type TrainingStatus = z.infer<typeof TrainingStatusSchema>;
-export type Training = z.infer<typeof TrainingSchema>;
+export type Training =  z.infer<ReturnType<typeof createTrainingSchema>>;

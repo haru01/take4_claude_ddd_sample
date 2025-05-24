@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Result } from '../../shared/types';
-import { Training, TrainingId, TrainingSchema } from './types';
+import { Training, TrainingId, createTrainingSchema } from './types';
 
 // === ID生成 ===
 export const createTrainingId = (): TrainingId => uuidv4() as TrainingId;
@@ -14,7 +14,7 @@ export const createTraining = (data: {
   capacity: number;
 }): Result<Training> => {
   const now = new Date();
-  
+
   const training = {
     id: createTrainingId(),
     title: data.title,
@@ -28,9 +28,10 @@ export const createTraining = (data: {
     updatedAt: now
   };
 
-  // Zodスキーマ検証（過去の日時チェックを含む）
-  const result = TrainingSchema.safeParse(training);
-  
+  // Zodスキーマ検証
+  const schema = createTrainingSchema(now);
+  const result = schema.safeParse(training);
+
   return result.success
     ? { success: true, value: result.data }
     : { success: false, error: result.error.errors[0]?.message || 'Invalid training' };
