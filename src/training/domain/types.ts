@@ -11,8 +11,22 @@ export const TrainingStatusSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('CANCELLED'), cancelledAt: z.date(), reason: z.string() })
 ]);
 
-export const createTrainingSchema = (now: Date) => z.object({
-  id: z.string().uuid(),
+// TrainingIdのZodスキーマ（ブランド型への変換付き）
+export const TrainingIdSchema = z.string().uuid().transform((val) => val as TrainingId);
+
+export const createTrainingSchema: (now: Date) => z.ZodObject<{
+  id: z.ZodType<TrainingId, any, any>,
+  title: z.ZodString,
+  description: z.ZodString,
+  dateTime: z.ZodEffects<z.ZodDate, Date, Date>,
+  location: z.ZodString,
+  capacity: z.ZodNumber,
+  registeredCount: z.ZodNumber,
+  status: typeof TrainingStatusSchema,
+  createdAt: z.ZodDate,
+  updatedAt: z.ZodDate
+}> = (now: Date) => z.object({
+  id: TrainingIdSchema,
   title: z.string().min(1, { message: 'タイトルは必須です' }).max(100, { message: 'タイトルは100文字以内で入力してください' }),
   description: z.string().min(1, { message: '説明は必須です' }).max(1000, { message: '説明は1000文字以内で入力してください' }),
   dateTime: z.date().refine((date) => date > now, { message: '過去の日時は指定できません' }),
