@@ -45,3 +45,10 @@ export const createTrainingHandler = (repository: TrainingRepository) => {
     );
   };
 };
+
+// === 研修一覧取得ハンドラー ===
+export const getAllTrainingsHandler = (repository: TrainingRepository) => {
+  return (): AppTaskEither<readonly Training[]> => {
+    return repository.findAll();
+  };
+};
