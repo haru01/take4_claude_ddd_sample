@@ -93,6 +93,22 @@ src/
         └── repository.ts     # インメモリ実装
 ```
 
+## ストーリーをステップバイステップでを実装するためのTODO.mdの型 新規登録：新規作成の場合
+
+* domainの types.ts を実装する
+* domainの function.create.test.ts でテストを作成する。テストは１つだけ実行できるようにほかは skip にする
+* domainの function.create.ts を実装する
+* テストを実行してパスすることを確認する、修正する
+* skip していた テストを1つだけ実行できるようにして、function.create.ts types.ts を修正する。
+* skipがなくなるまで繰り返す
+* ３回 Red になって、進展がなければ、一旦停止して、ナビゲーターの指示を受ける
+* application の service.create.test.ts　を作成する。テストは１つだけ実行できるようにほかは skip にする
+* application の service.create.ts を実装する
+* テストを実行してパスすることを確認する、修正する
+* skip していた テストを1つだけ実行できるようにして、function.create.ts types.ts を修正する。
+* skipがなくなるまで繰り返す
+* 2回 テストに失敗したら 一旦停止して、ナビゲーターの指示を受ける
+
 ## 1. 基盤型定義
 
 ```typescript
@@ -453,7 +469,7 @@ import { CustomerId, OrderItem } from '../src/order/domain/types';
 
 describe('関数型DDD実践', () => {
   describe('Zodバリデーション統合テスト', () => {
-    it('✅ 有効な金額', () => {
+    it('有効な金額', () => {
       const result = createMoney(1000, 'JPY');
       expect(result.success).toBe(true);
       if (result.success) {
@@ -462,12 +478,12 @@ describe('関数型DDD実践', () => {
       }
     });
 
-    it('❌ 負の金額はZodでブロック', () => {
+    it('負の金額はZodでブロック', () => {
       const result = createMoney(-100, 'JPY');
       expect(result.success).toBe(false);
     });
 
-    it('❌ 重複商品はZodでブロック', () => {
+    it('重複商品はZodでブロック', () => {
       const command = {
         customerId: '550e8400-e29b-41d4-a716-446655440000',
         items: [
@@ -483,7 +499,7 @@ describe('関数型DDD実践', () => {
       }
     });
 
-    it('❌ 異なる通貨の混在はZodでブロック', () => {
+    it('異なる通貨の混在はZodでブロック', () => {
       const money1 = createMoney(1000, 'JPY');
       const money2 = createMoney(10, 'USD');
 
@@ -503,7 +519,7 @@ describe('関数型DDD実践', () => {
   });
 
   describe('純粋関数によるドメインロジック', () => {
-    it('✅ 注文作成', () => {
+    it('注文作成', () => {
       const money = createMoney(1000, 'JPY');
       expect(money.success).toBe(true);
 
@@ -519,7 +535,7 @@ describe('関数型DDD実践', () => {
       }
     });
 
-    it('✅ 状態遷移', () => {
+    it('状態遷移', () => {
       const money = createMoney(1000, 'JPY');
       const items: OrderItem[] = [{ productId: 'p1', quantity: 1, unitPrice: money.value! }];
       const orderResult = createOrder('c1' as CustomerId, items);
@@ -541,7 +557,7 @@ describe('関数型DDD実践', () => {
       repository = new InMemoryOrderRepository();
     });
 
-    it('✅ 完全なフロー', async () => {
+    it('完全なフロー', async () => {
       const handler = createOrderHandler(repository);
       const command = {
         customerId: '550e8400-e29b-41d4-a716-446655440000',
@@ -558,7 +574,7 @@ describe('関数型DDD実践', () => {
       expect(repository.size()).toBe(1);
     });
 
-    it('❌ Zodバリデーションエラーが適切に伝播', async () => {
+    it('Zodバリデーションエラーが適切に伝播', async () => {
       const handler = createOrderHandler(repository);
       const invalidCommand = {
         customerId: 'invalid-uuid',
@@ -621,10 +637,10 @@ const runExample = async () => {
   // 結果処理
   await fold(
     (error) => async () => {
-      console.error('❌ エラー:', error.type, '-', error.message);
+      console.error('エラー:', error.type, '-', error.message);
     },
     (order) => async () => {
-      console.log('✅ 注文作成成功!');
+      console.log('注文作成成功!');
       console.log(`📦 注文ID: ${order.id}`);
       console.log(`👤 顧客ID: ${order.customerId}`);
       console.log(`📱 商品数: ${order.items.length}個`);
