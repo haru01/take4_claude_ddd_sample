@@ -93,21 +93,16 @@ src/
         └── repository.ts     # インメモリ実装
 ```
 
-## ストーリーをステップバイステップでを実装するためのTODO.mdの型 新規登録：新規作成の場合
+## ストーリーをステップバイステップで実装するためのTODO.mdの型
 
-* domainの types.ts を実装する
-* domainの function.create.test.ts でテストを作成する。テストは１つだけ実行できるようにほかは skip にする
-* domainの function.create.ts を実装する
-* テストを実行してパスすることを確認する、修正する
-* skip していた テストを1つだけ実行できるようにして、function.create.ts types.ts を修正する。
-* skipがなくなるまで繰り返す
-* ３回 Red になって、進展がなければ、一旦停止して、ナビゲーターの指示を受ける
-* application の service.create.test.ts　を作成する。テストは１つだけ実行できるようにほかは skip にする
-* application の service.create.ts を実装する
-* テストを実行してパスすることを確認する、修正する
-* skip していた テストを1つだけ実行できるようにして、function.create.ts types.ts を修正する。
-* skipがなくなるまで繰り返す
-* 2回 テストに失敗したら 一旦停止して、ナビゲーターの指示を受ける
+ユーザーストーリーから実装タスクを作成する場合は、`.claude/commands/create_todo.md` のテンプレートに従ってTODO.mdを生成してください。
+
+このテンプレートは以下の内容を含みます：
+- ドメイン層の型定義とリファクタリング
+- TDDアプローチによるドメイン関数の実装
+- アプリケーション層のサービス実装
+- 段階的なテスト実行とリファクタリング指針
+
 
 ## 1. 基盤型定義
 
@@ -457,146 +452,376 @@ export class InMemoryOrderRepository implements OrderRepository {
 }
 ```
 
-## 6. テスト（TDD確認）
+## 6. テスト実装ガイド
+
+### テスト実行戦略
+
+#### TDDサイクル
+1. **Red**: 失敗するテストを書く
+2. **Green**: 最小限の実装でテストを通す
+3. **Refactor**: コードを改善する
+
+#### テストの段階的実行
+- `it.skip()` を使って一つずつテストを有効化
+- 3回連続で失敗したら立ち止まって設計を見直す
+- ドメイン層 → アプリケーション層の順でテスト
+
+#### テストカバレッジの目標
+- ドメイン関数: 100%
+- アプリケーションサービス: 主要なパスをカバー
+- エッジケースと境界値を必ずテスト
+
+### テストユーティリティ
 
 ```typescript
-// tests/order.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createOrder, placeOrder, createMoney } from '../src/order/domain/functions';
-import { createOrderHandler, CreateOrderCommandSchema } from '../src/order/application/service';
-import { InMemoryOrderRepository } from '../src/order/infrastructure/repository';
-import { CustomerId, OrderItem } from '../src/order/domain/types';
+// tests/order/test-utils.ts
+import { OrderItem, Money, Order, CustomerId } from '../../src/order/domain/types';
+import { createMoney, createOrder } from '../../src/order/domain/functions';
 
-describe('関数型DDD実践', () => {
-  describe('Zodバリデーション統合テスト', () => {
-    it('有効な金額', () => {
-      const result = createMoney(1000, 'JPY');
+// デフォルトテストデータ
+export const defaultOrderItems: OrderItem[] = [
+  { productId: 'p1', quantity: 2, unitPrice: createMoney(1000, 'JPY').value! }
+];
+
+// カスタムアサーション
+export const expectValidationError = (
+  items: OrderItem[], 
+  expectedError: string
+) => {
+  const result = createOrder('c1' as CustomerId, items);
+  expect(result.success).toBe(false);
+  if (!result.success) {
+    expect(result.error).toContain(expectedError);
+  }
+};
+
+export const expectSuccess = (items: OrderItem[]) => {
+  const result = createOrder('c1' as CustomerId, items);
+  expect(result.success).toBe(true);
+  return result;
+};
+
+// ビルダーパターン
+export const orderBuilder = {
+  withItems: (items: OrderItem[]) => ({ ...defaultOrder, items }),
+  withStatus: (status: OrderStatus) => ({ ...defaultOrder, status }),
+  build: () => defaultOrder
+};
+```
+
+### ドメイン層テスト
+
+```typescript
+// tests/order/domain/functions.test.ts
+import { describe, it, expect } from 'vitest';
+import { createOrder, placeOrder, cancelOrder, createMoney } from '../../../src/order/domain/functions';
+import { CustomerId, OrderItem, Order } from '../../../src/order/domain/types';
+import { expectValidationError, expectSuccess } from '../test-utils';
+
+describe('Order Domain Functions', () => {
+  describe('createOrder', () => {
+    describe('正常系', () => {
+      it('有効な注文を作成できる', () => {
+        const money = createMoney(1000, 'JPY');
+        expect(money.success).toBe(true);
+        
+        if (money.success) {
+          const items: OrderItem[] = [
+            { productId: 'p1', quantity: 2, unitPrice: money.value }
+          ];
+          const result = createOrder('c1' as CustomerId, items);
+          
+          expect(result.success).toBe(true);
+          if (result.success) {
+            expect(result.value.status.type).toBe('DRAFT');
+            expect(result.value.totalAmount.amount).toBe(2000);
+            expect(result.value.items).toHaveLength(1);
+          }
+        }
+      });
+    });
+    
+    describe('バリデーションエラー', () => {
+      describe('商品の検証', () => {
+        it('空の商品リストはエラー', () => {
+          expectValidationError([], '商品が必要です');
+        });
+        
+        it.skip('重複商品はエラー', () => {
+          const money = createMoney(1000, 'JPY').value!;
+          const items: OrderItem[] = [
+            { productId: 'p1', quantity: 1, unitPrice: money },
+            { productId: 'p1', quantity: 2, unitPrice: money }
+          ];
+          expectValidationError(items, '同じ商品を複数回追加');
+        });
+        
+        it.skip('異なる通貨の混在はエラー', () => {
+          const jpyMoney = createMoney(1000, 'JPY').value!;
+          const usdMoney = createMoney(10, 'USD').value!;
+          const items: OrderItem[] = [
+            { productId: 'p1', quantity: 1, unitPrice: jpyMoney },
+            { productId: 'p2', quantity: 1, unitPrice: usdMoney }
+          ];
+          expectValidationError(items, '同じ通貨である必要');
+        });
+      });
+    });
+    
+    describe('境界値テスト', () => {
+      it('商品数が上限10個まで登録できる', () => {
+        const money = createMoney(1000, 'JPY').value!;
+        const items: OrderItem[] = Array.from({ length: 10 }, (_, i) => ({
+          productId: `p${i + 1}`,
+          quantity: 1,
+          unitPrice: money
+        }));
+        
+        const result = expectSuccess(items);
+        if (result.success) {
+          expect(result.value.items).toHaveLength(10);
+        }
+      });
+      
+      it.skip('商品数が11個以上はエラー', () => {
+        const money = createMoney(1000, 'JPY').value!;
+        const items: OrderItem[] = Array.from({ length: 11 }, (_, i) => ({
+          productId: `p${i + 1}`,
+          quantity: 1,
+          unitPrice: money
+        }));
+        
+        expectValidationError(items, '商品は10個まで');
+      });
+    });
+  });
+  
+  describe('状態遷移のテスト', () => {
+    let draftOrder: Order;
+    
+    beforeEach(() => {
+      const money = createMoney(1000, 'JPY').value!;
+      const items: OrderItem[] = [
+        { productId: 'p1', quantity: 1, unitPrice: money }
+      ];
+      const result = createOrder('c1' as CustomerId, items);
+      if (result.success) {
+        draftOrder = result.value;
+      }
+    });
+    
+    it('DRAFTからPLACEDへの遷移', () => {
+      const result = placeOrder(draftOrder, 'payment123');
+      
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.value.amount).toBe(1000);
-        expect(result.value.currency).toBe('JPY');
+        expect(result.value.status.type).toBe('PLACED');
+        expect((result.value.status as any).paymentId).toBe('payment123');
       }
     });
-
-    it('負の金額はZodでブロック', () => {
-      const result = createMoney(-100, 'JPY');
+    
+    it.skip('PLACEDの注文はキャンセルできる', () => {
+      const placedResult = placeOrder(draftOrder, 'payment123');
+      if (placedResult.success) {
+        const cancelResult = cancelOrder(placedResult.value, 'Customer request');
+        
+        expect(cancelResult.success).toBe(true);
+        if (cancelResult.success) {
+          expect(cancelResult.value.status.type).toBe('CANCELLED');
+        }
+      }
+    });
+    
+    it.skip('SHIPPEDの注文はキャンセルできない', () => {
+      // SHIPPEDステータスの注文を作成
+      const shippedOrder: Order = {
+        ...draftOrder,
+        status: { type: 'SHIPPED', shippedAt: new Date(), trackingCode: 'TRACK123' }
+      };
+      
+      const result = cancelOrder(shippedOrder, 'Too late');
+      
       expect(result.success).toBe(false);
-    });
-
-    it('重複商品はZodでブロック', () => {
-      const command = {
-        customerId: '550e8400-e29b-41d4-a716-446655440000',
-        items: [
-          { productId: 'p1', quantity: 1, unitPrice: 1000, currency: 'JPY' },
-          { productId: 'p1', quantity: 2, unitPrice: 1500, currency: 'JPY' } // 重複
-        ]
-      };
-
-      const result = CreateOrderCommandSchema.safeParse(command);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.errors[0]?.message).toContain('同じ商品を複数回追加することはできません');
-      }
-    });
-
-    it('異なる通貨の混在はZodでブロック', () => {
-      const money1 = createMoney(1000, 'JPY');
-      const money2 = createMoney(10, 'USD');
-
-      if (money1.success && money2.success) {
-        const items: OrderItem[] = [
-          { productId: 'p1', quantity: 1, unitPrice: money1.value },
-          { productId: 'p2', quantity: 1, unitPrice: money2.value }
-        ];
-
-        const result = createOrder('c1' as CustomerId, items);
-        expect(result.success).toBe(false);
-        if (!result.success) {
-          expect(result.error).toContain('同じ通貨である必要があります');
-        }
-      }
-    });
-  });
-
-  describe('純粋関数によるドメインロジック', () => {
-    it('注文作成', () => {
-      const money = createMoney(1000, 'JPY');
-      expect(money.success).toBe(true);
-
-      if (money.success) {
-        const items: OrderItem[] = [{ productId: 'p1', quantity: 2, unitPrice: money.value }];
-        const result = createOrder('c1' as CustomerId, items);
-
-        expect(result.success).toBe(true);
-        if (result.success) {
-          expect(result.value.status.type).toBe('DRAFT');
-          expect(result.value.totalAmount.amount).toBe(2000);
-        }
-      }
-    });
-
-    it('状態遷移', () => {
-      const money = createMoney(1000, 'JPY');
-      const items: OrderItem[] = [{ productId: 'p1', quantity: 1, unitPrice: money.value! }];
-      const orderResult = createOrder('c1' as CustomerId, items);
-
-      if (orderResult.success) {
-        const result = placeOrder(orderResult.value, 'pay123');
-        expect(result.success).toBe(true);
-        if (result.success) {
-          expect(result.value.status.type).toBe('PLACED');
-        }
-      }
-    });
-  });
-
-  describe('TaskEitherパイプライン', () => {
-    let repository: InMemoryOrderRepository;
-
-    beforeEach(() => {
-      repository = new InMemoryOrderRepository();
-    });
-
-    it('完全なフロー', async () => {
-      const handler = createOrderHandler(repository);
-      const command = {
-        customerId: '550e8400-e29b-41d4-a716-446655440000',
-        items: [{ productId: 'p1', quantity: 2, unitPrice: 1000, currency: 'JPY' }]
-      };
-
-      const result = await handler(command)();
-
-      expect(result._tag).toBe('Right');
-      if (result._tag === 'Right') {
-        expect(result.right.status.type).toBe('DRAFT');
-        expect(result.right.totalAmount.amount).toBe(2000);
-      }
-      expect(repository.size()).toBe(1);
-    });
-
-    it('Zodバリデーションエラーが適切に伝播', async () => {
-      const handler = createOrderHandler(repository);
-      const invalidCommand = {
-        customerId: 'invalid-uuid',
-        items: [
-          { productId: 'p1', quantity: 1, unitPrice: 1000, currency: 'JPY' },
-          { productId: 'p1', quantity: 2, unitPrice: 1500, currency: 'JPY' } // 重複
-        ]
-      };
-
-      const result = await handler(invalidCommand)();
-
-      expect(result._tag).toBe('Left');
-      if (result._tag === 'Left') {
-        expect(result.left.type).toBe('ValidationError');
-        expect(result.left.message).toContain('同じ商品を複数回追加することはできません');
-      }
+      expect(result.error).toContain('キャンセル不可');
     });
   });
 });
 ```
 
-## まとめ
+### アプリケーション層テスト
+
+```typescript
+// tests/order/application/service.test.ts
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createOrderHandler } from '../../../src/order/application/service';
+import { InMemoryOrderRepository } from '../../../src/order/infrastructure/repository';
+
+describe('TaskEitherパイプライン', () => {
+  let repository: InMemoryOrderRepository;
+  let handler: ReturnType<typeof createOrderHandler>;
+  
+  beforeEach(() => {
+    repository = new InMemoryOrderRepository();
+    handler = createOrderHandler(repository);
+  });
+  
+  describe('注文作成ハンドラー', () => {
+    it('完全な注文作成フロー', async () => {
+      const command = {
+        customerId: '550e8400-e29b-41d4-a716-446655440000',
+        items: [
+          { productId: 'p1', quantity: 2, unitPrice: 1000, currency: 'JPY' }
+        ]
+      };
+      
+      const result = await handler(command)();
+      
+      // パイプライン成功の検証
+      expect(result._tag).toBe('Right');
+      
+      // ドメインルールの検証
+      if (result._tag === 'Right') {
+        expect(result.right.totalAmount.amount).toBe(2000);
+        expect(result.right.status.type).toBe('DRAFT');
+        expect(result.right.items).toHaveLength(1);
+        expect(result.right.customerId).toBe(command.customerId);
+      }
+      
+      // リポジトリへの保存確認
+      expect(repository.size()).toBe(1);
+    });
+    
+    it.skip('既存のドラフト注文がある場合はエラー', async () => {
+      const command = {
+        customerId: '550e8400-e29b-41d4-a716-446655440000',
+        items: [
+          { productId: 'p1', quantity: 1, unitPrice: 1000, currency: 'JPY' }
+        ]
+      };
+      
+      // 事前条件：ドラフト注文を作成
+      await handler(command)();
+      
+      // 同じ顧客で再度注文作成
+      const result = await handler(command)();
+      
+      expect(result._tag).toBe('Left');
+      if (result._tag === 'Left') {
+        expect(result.left.type).toBe('DomainError');
+        expect(result.left.message).toContain('既存のドラフト注文があります');
+      }
+    });
+    
+    it('バリデーションエラーが適切に伝播', async () => {
+      const invalidCommand = {
+        customerId: 'invalid-uuid',
+        items: []  // 空の商品リスト
+      };
+      
+      const result = await handler(invalidCommand)();
+      
+      expect(result._tag).toBe('Left');
+      if (result._tag === 'Left') {
+        expect(result.left.type).toBe('ValidationError');
+      }
+    });
+  });
+  
+  describe('複数注文の処理', () => {
+    it('異なる顧客の注文は同時に作成できる', async () => {
+      const command1 = {
+        customerId: '550e8400-e29b-41d4-a716-446655440001',
+        items: [{ productId: 'p1', quantity: 1, unitPrice: 1000, currency: 'JPY' }]
+      };
+      
+      const command2 = {
+        customerId: '550e8400-e29b-41d4-a716-446655440002',
+        items: [{ productId: 'p2', quantity: 2, unitPrice: 2000, currency: 'JPY' }]
+      };
+      
+      const [result1, result2] = await Promise.all([
+        handler(command1)(),
+        handler(command2)()
+      ]);
+      
+      expect(result1._tag).toBe('Right');
+      expect(result2._tag).toBe('Right');
+      expect(repository.size()).toBe(2);
+    });
+  });
+});
+```
+
+### プロパティベーステスト（オプション）
+
+```typescript
+// tests/order/domain/properties.test.ts
+import fc from 'fast-check';
+import { describe, it, expect } from 'vitest';
+import { createOrder } from '../../../src/order/domain/functions';
+import { CustomerId, OrderItem } from '../../../src/order/domain/types';
+
+// Arbitrary定義
+const moneyArbitrary = fc.record({
+  amount: fc.integer({ min: 0, max: 1000000 }),
+  currency: fc.constantFrom('JPY', 'USD', 'EUR')
+});
+
+const orderItemArbitrary = fc.record({
+  productId: fc.string({ minLength: 1, maxLength: 10 }),
+  quantity: fc.integer({ min: 1, max: 100 }),
+  unitPrice: moneyArbitrary
+});
+
+describe('プロパティベーステスト', () => {
+  it('合計金額は常に個々の商品金額の合計と等しい', () => {
+    fc.assert(
+      fc.property(
+        fc.array(orderItemArbitrary, { minLength: 1, maxLength: 10 }),
+        (items) => {
+          // 同一通貨のみにフィルタ
+          const currency = items[0]?.unitPrice.currency;
+          const sameCurrentItems = items.filter(
+            item => item.unitPrice.currency === currency
+          );
+          
+          if (sameCurrentItems.length === 0) return;
+          
+          const result = createOrder('c1' as CustomerId, sameCurrentItems);
+          if (result.success) {
+            const expectedTotal = sameCurrentItems.reduce(
+              (sum, item) => sum + (item.quantity * item.unitPrice.amount), 
+              0
+            );
+            expect(result.value.totalAmount.amount).toBe(expectedTotal);
+          }
+        }
+      )
+    );
+  });
+  
+  it('注文は常に1個以上10個以下の商品を持つ', () => {
+    fc.assert(
+      fc.property(
+        fc.array(orderItemArbitrary, { minLength: 0, maxLength: 20 }),
+        (items) => {
+          const result = createOrder('c1' as CustomerId, items);
+          
+          if (items.length === 0 || items.length > 10) {
+            expect(result.success).toBe(false);
+          } else {
+            // 通貨やその他の検証が通れば成功する可能性がある
+            if (result.success) {
+              expect(result.value.items.length).toBeGreaterThanOrEqual(1);
+              expect(result.value.items.length).toBeLessThanOrEqual(10);
+            }
+          }
+        }
+      )
+    );
+  });
+});
+```
 
 ## 7. 実行可能サンプル
 
