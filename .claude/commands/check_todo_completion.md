@@ -2,6 +2,7 @@
 
 ---
 name: check_todo_completion
+
 args:
 
 - name: index
