@@ -2,12 +2,13 @@
 
 ---
 name: run_todo
+
 args:
 
 - name: index
-  short: i
-  description: TODOのインデックス番号（例: create_training）
-  required: true
+  - short: i
+  - description: TODOのインデックス番号（例: create_training）
+  - required: true
 
 ---
 
