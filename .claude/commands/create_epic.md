@@ -6,9 +6,9 @@ name: create_user_story
 args:
 
 - name: need
-  short: n
-  description: ユーザが本当に必要としていること（ニーズ）
-  required: true
+  - short: n
+  - description: ユーザが本当に必要としていること（ニーズ）
+  - required: true
 
 ---
 
