@@ -1,7 +1,7 @@
 # ニーズを満たすためのエピックを作成するコマンド
 
 ---
-name: create_user_story
+name: create_epic
 
 args:
 
